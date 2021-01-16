@@ -1,0 +1,472 @@
+---
+title: "Project - Analysis of Google Play Store Data Set"
+subtitle: "BUAN 6357 - Advanced Analytics with R - Fall 2020"
+author: "Emran Hussain"
+date: "`r Sys.Date()`"
+output: html_document
+---
+## Executive Summary
+
+The Google data set I have selected on is the "Google Play Store Apps" and has features like "Rating", "Installs",‘Reviews’, “Price’, ‘Type’ and other variables. I have uploaded the data set along with this report. The data set can also be found in the following link:
+
+https://www.kaggle.com/lava18/google-play-store-apps
+
+The file size isn't that big.
+I have not provided every single diagram due to report restrictions. However, all the charts and graphs can be generated with the code that I have provided.
+The purpose of this report is to find insighst in the data set and if there is any business relevance from this information.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r loadpackages, include = FALSE}
+
+# Please install pacman and activate the library
+# The Here package aids in not specifying the file path
+# tinytex:: install_tinytex() is required to generate PDF.
+# Imputation with Mice takes a bit of time.
+# install.packages("pacman")
+# library(pacman)
+
+pacman::p_load(tinytex, mice, caret, randomForest, ggplot2, VIM, rmarkdown, plyr, lubridate, corrplot, Xmisc, visdat, tidyverse, leaflet, data.table, here)
+tinytex::install_tinytex()
+search()
+theme_set(theme_classic())
+options(digits = 3)
+
+```
+## Section 1 - Introduction
+
+My initial hypothesis was that the a positive sentiment polarity increases number of installations. I have had to reject that as the data set did not have sufficient information about user reviews (sentiment) regaring all apps. However, I was able to find a similar hypothesis after exploring the data - The success of an app is dependent upon the number of installs, user rating and reviews and that it can be predicted with certain specific machine learning models.
+
+I have used R programming language and the associated packages like caret, ggplot2, tidyverse, randomForest and others for analysis of the data set.
+I started my work by importing all the relevant packages and loading the data set.
+Please note that the 'pacman' package checks all available packages in the user's system and installs the missing packages. The user does not have to specify a file path with the 'here' package. 'tiny_tex' is required to get a PDF output. Lastly, imputing data with 'Mice' package takes a bit of time.
+
+I proceeded to get an outlook of the google data set. The Google data set had 10841 rows and 13 columns.
+
+```{r loaddata, include=FALSE}
+
+set.seed(123)
+
+# Please ensure the correct file Path if Here package doese not work
+google <- read_csv("googleplaystore.csv") # Use here package in Markdown
+
+#####################################################################################
+
+# Renaming Columns
+names(google)[1] <- "app"
+names(google)[2] <- "category"
+names(google)[3] <- "score"
+names(google)[4] <- "reviews"
+names(google)[5] <- "size"
+names(google)[6] <- "installs"
+names(google)[7] <- "type"
+names(google)[8] <- "price"
+names(google)[9] <- "rating"
+names(google)[10] <- "genre"
+names(google)[11] <- "updated"
+names(google)[12] <- "current"
+names(google)[13] <- "android"
+
+# Dropping Price, Genre Column due to redundancy
+# Dropping Current Version as it is not relevant
+google2 <- google[-c(8, 10, 12)]
+
+#summary(google2)
+#spec(google2)
+#glimpse(google2)
+#str(google2)
+
+#x <- as.data.frame(head(google)) # Show in Markdown in data table
+#print(x)
+
+
+```
+
+## Section 2 - Data Cleaning
+
+The Google data set required a lot of cleaning. I renamed all the features for better understanding. The major thing to note here is that 'Rating' feature has been renamed to 'Score' and 'Content Rating' has been renamed 'Rating'. 'Score' is the user rating out of 5 and 'Rating' is age restriction rating given by Google Play Store.
+I dropped the 'Price' and 'Genre' column as they were redundant with 'Type' and 'Category' and they could have possible sources collinearity. I have also dropped 'Current Version' feature. The data set does not have any duplicates.
+I dropped 1 observation in which the review was missing. It is because the whole row had erroneous information. For the category feature, I converted it into a factor and renamed all levels for better interpretability. "Type" had 1 missing variable, but I revalued it as "Free" because it corresponded as 0 in the price column. I have also renamed the levels of 'rating'. 'Size', 'installs' and 'android' needed some and I had to remove special characters like ‘$’ and ‘+’. Here is a description of the features after some cleaning and transformation:
+
+•	App - Name of App (Character)
+
+•	Category – MANY - (Factor)
+
+•	Reviews – Number of Reviews (Numeric)
+
+•	Type – Free/Paid (Factor)
+
+•	Rating – Age Rating by Google Play Store (Factor)
+
+•	Installs_n – Number of Installs (numeric)
+
+•	Installs_f – Number of installs (Factor)
+
+•	Updated_date – date at which app was updated (date)
+
+•	Updated_m – month in which updates usually occur (factor)
+
+•	Size3 – size of app in mb (numeric)
+
+•	Android2 – android version (numeric) – if app works on this version
+
+•	Score2 – Average Score (rating) out of 5 (Numeric)
+
+
+```{r cleaning, echo=FALSE}
+
+set.seed(123)
+
+# Cleaning and Preprocessing
+
+# Dealing with the variables
+
+#summary(google2)
+
+# App -the app column is fine
+
+# Reviews - Dropping 1 row of Reviews - whole row has messy data
+google2 <- google2[-10473,]
+#which(is.na(google2$reviews))
+#typeof(google2$reviews)
+#class(google2$reviews)
+
+
+# Category - Rename Category Levels
+google2$category <- factor(google2$category)
+
+
+google2$category <- revalue(google2$category, c('ART_AND_DESIGN' = 'art', "AUTO_AND_VEHICLES" = 'auto',
+                                                'BEAUTY' = 'beauty', 'BOOKS_AND_REFERENCE' = 'books', 'BUSINESS' = 'business',
+                                                'COMICS' = 'comics', 'COMMUNICATION' = 'communication', 'DATING' = 'dating',
+                                                'EDUCATION' = 'education', 'ENTERTAINMENT' = 'entertainment', 'EVENTS' = 'events', 'FINANCE' ='finance',
+                                                'FOOD_AND_DRINK' = 'food', 'HEALTH_AND_FITNESS' = 'health', 'HOUSE_AND_HOME' = 'home',
+                                                'LIBRARIES_AND_DEMO' = 'library', 'LIFESTYLE' = 'lifestyle', 'GAME' = 'game', 'FAMILY' = 'family',
+                                                'MEDICAL'='medical','SOCIAL'='social', 'SHOPPING' = 'shopping', 'PHOTOGRAPHY' = 'photography',
+                                                'SPORTS' = 'sports', 'TRAVEL_AND_LOCAL' = 'travel', 'TOOLS'='tools','PERSONALIZATION'='personalization',
+                                                'PRODUCTIVITY' = 'productivity', 'PARENTING' = 'parenting', 'WEATHER' = 'weather', 
+                                                'VIDEO_PLAYERS' = 'video', 'NEWS_AND_MAGAZINES' = 'news', 'MAPS_AND_NAVIGATION' = 'maps'))
+
+
+#unique(google2$category)
+#levels(google2$category)
+#typeof(google2$category)
+#class(google2$category)
+
+# Type
+google2$type <- as.factor(google2$type)
+google2$type <- revalue(google2$type, c('NaN' = 'Free')) # As price is Zero
+
+#unique(google2$type)
+#levels(google2$type)
+#typeof(google2$type)
+#class(google2$type)
+
+
+# Rating
+google2$rating <- as.factor(google2$rating)
+google2$rating <- revalue(google2$rating, c('Everyone' = 'everyone', 'Teen' = 'teen', 'Everyone 10+' = 'everyone', 'Mature 17+' = 'mature',
+                                            'Adults only 18+' = 'mature', 'Unrated' = 'everyone')) # Unrated set to Everyone based on other columns
+
+#subset(google2, google2$rating == 'Unrated')
+#typeof(google2$rating)
+#class(google2$rating)
+#levels(google2$rating)
+#unique(google2$rating)
+
+
+# Installs
+google2$installs_n <- rstrip(google2$installs, "+")
+google2$installs_n <- gsub(',', '', google2$installs_n)
+google2$installs_n <- as.numeric(google2$installs_n)
+#typeof(google2$installs_n)
+#class(google2$installs_n)
+#unique(google2$installs_n)
+
+google2$installs_f <- as.factor(google2$installs)
+#typeof(google2$installs_f)
+#class(google2$installs_f)
+#unique(google2$installs_f)
+
+
+# Date
+google2$updated2 <- mdy(google2$updated)
+google2$updated_date <- as.Date(google2$updated2, format = "%m/%d/%y") # Works fine for date
+google2$updated_m <- months(google2$updated_date)
+google2$updated_m <- as.factor(google2$updated_m)
+#typeof(google2$updated_date)
+#class(google2$updated_date)
+#typeof(google2$updated_m)
+#class(google2$updated_m)
+#unique(google2$updated_m)
+# google2$updated_date[4] - google2$updated_date[2] - time difference
+
+# Size
+google2$size2 <- rstrip(google2$size, "M")
+google2$size2 <- rstrip(google2$size2, "k")
+google2$size2 <- rstrip(google2$size2, "+")
+google2$size2 <- gsub("Varies with device", NA, google2$size2)
+
+google2$size3 <- as.numeric(google2$size2)
+#unique(google2$size2)
+#summary(google2)
+```
+In the next step of data cleaning, I have dealt with missing variables. Values can be Missing at random (MAR), Missing completely at random (MCAR) or Missing not at random (MNAR). MNAR are situations in which the observations are systematically absent. It could be because the users didn't respond. This is not random and imputation should not be used.
+
+3 features had missing values - 'size3', 'android2' and 'score2'. I have tried looking for patterns of missingness but it was completely random. An app cannot be 0 megabyte. An android version cannot be missing. The score, or user rating cannot be blank when there are so many reviews. It also was not specific to any category of apps. So I had to conclude that it was missing at random (MAR). I have had rename certain values like 'NaN' or 0 to NA for smoother calculations.
+
+The following plot (Figure 2) show the distribution of missing data in the data set. It shows that 3.5% of the data is missing. It is best not to drop these observations. It is actually never a good idea to drop observations. It should only be undertaken when other options are not working. Imputation would be a better option.
+
+```{r missinggplot, warning=FALSE, echo=FALSE, fig.height= 3, fig.width=6, fig.align='center'}
+# Android
+# will use mice for missing data
+google2$android2 <- as.numeric(substr(google2$android, start = 1, stop = 3))
+#typeof(google2$android2)
+#class(google2$android2)
+
+# Score
+google2$score2 <- as.numeric(gsub("NaN", NA, google2$score))
+
+google3 <- google2[-c(3, 5, 6, 9, 10, 13, 16)]
+vis_miss(google3) + labs(title = 'Figure 2 - Missingness Pattern')
+# md.pattern(google3, plot = TRUE, rotate.names = TRUE)
+
+#missing1 <- google3 %>% filter(!complete.cases(.))
+#view(head(missing1))
+
+#missing_plot2 <- aggr(google3, col = c("blue", "red"), labels=names(google3), cex.axis=0.7,
+                     # gap=3, ylab=c("Missing Data", "pattern"), numbers=TRUE, sortVars=TRUE)
+
+#missing_plot2
+```
+I used the MICE package to impute the data. I set the parameters to 5 iterations, 5 imputations and method as 'cart'. I have selected the second imputation as it resmbled the mean and median of the original data set. The following density plot (Figure 3) shows how close the imputed data is to the original data set.
+
+```{r impute, results="hide", warning=FALSE, include=FALSE}
+
+set.seed(123)
+
+# Dealing with Missing Variables
+
+# The number of reviews is low is probably MCAR, MAR or MNAR
+# Missing completely at random
+# Missing from various categories
+
+# Imputation with MICE package - This will take time. Please wait for 5 iterations.
+impute_data <- mice(google3, m=5, maxit=5, method="cart", seed=100)
+#summary(impute_data)
+```
+
+```{r missing, echo=FALSE, fig.height= 3, fig.width=6, fig.align='center'}
+# I selected imputation number 2 as it resembled a bit of the main dataset's means and medians. But any of the 5 imputations could have been selected.
+
+google4 <- complete(impute_data, 2) # Imputed data number 2 seems to be the most reasonable
+#summary(google3)
+#summary(google4)
+
+# Strip Plot
+densityplot(impute_data, main='Figure 3 - Density Plot')
+```
+
+The last step in data cleaning is dealing with outliers. As can be seen in the box plots and histograms from Figure 4 to 9, that there are a lot of outliers. This required a lot of ommision and replacement of values as outliers does skew the results. It resulted in a tolal deletion of 700 observations out of 10840 observations.
+
+```{r outlier, echo=FALSE, fig.height= 3, fig.width=6, fig.align='center'}
+
+set.seed(123)
+
+## Outliers
+#############################
+
+# ggplot(google4, aes(x=score2)) + geom_boxplot(fill='green') + theme_minimal() + labs(title='Outlier Score-Boxplot')
+# ggplot(google4, aes(x=score2)) + geom_histogram(fill='green', color='black') + theme_minimal() + labs(title='Histogram Score-Boxplot')
+
+par(mfrow=c(1,2))
+boxplot(google4$score2, horizontal = TRUE, main='Figure 4 - Score Outlier, Boxplot', xlab ='Score (rating out of 5)')
+hist(google4$score2, main='Figure 5 - Score Outlier, Histogram', xlab ='Score (rating out of 5)')
+boxplot(google4$size3, horizontal = TRUE, main='Figure 6 - Size Outlier, Boxplot', xlab = 'Size (mb)')
+hist(google4$size3, main='Figure 7 - Size Outlier, Histogram', xlab = 'Size (mb)')
+boxplot(google4$android2, horizontal = TRUE, main='Figure 8 - Android Outlier, Boxplot', xlab = 'Android Version')
+hist(google4$android2, main='Figure 9 - Android Outlier, Histogram', xlab = 'Android Version')
+
+# Size Outliers
+google5 <- google4 %>% subset(google4$size3 < 100) # Loss of 300 Observations
+google5$size3[which(google5$size3>170)] <- 40 # Replacing only the size with a value near the 3rd quartile
+
+# Score Outliers
+google5 <- google5 %>% subset(google5$score2 > 2) # Loss of 164 Observations
+google5$score2[which(google5$score2<3)] <- 3 # Replacing only the Score with a value near the first quartile
+
+# Android Outliers
+google6 <- google5 %>% subset(google5$android2 < 6) # Loss of 118 Observations
+google6 <- google6 %>% subset(google6$android2 > 2)
+google6$android2[which(google6$android2>5)] <- 5 # Replacing anything over 4 with 4 as higher android version didnt exist back then
+google6$android2[which(google6$android2<3.5)] <- 3.5 # Replacing anything over 4 with 4 as higher android version didnt exist back then
+
+#boxplot(google5$score2, horizontal = TRUE)
+#boxplot(google5$size3, horizontal = TRUE)
+#boxplot(google6$android2, horizontal = TRUE)
+
+#hist(google5$score2)
+#hist(google5$size3)
+#hist(google6$android2)
+
+#summary(google6)
+
+
+# There are no duplicates
+
+```
+
+
+
+## Section 3 - Exploratory Data Analysis and Insights
+
+After the removal of outliers, I proceeded on to finding patterns in the data. The problem statement was whether an app will be succesful if launched into the Google Play Store and my assumption was that success depends on user ratings (score2) and the number of installations (installs_f). So my goal is to find what features influence score and number of installations. The following is a pie chart of the proportion of apps in each category.
+```{r pie, echo=FALSE, fig.height= 7, fig.width=7, fig.align='center'}
+count_p <- table(google6$category)
+pie(count_p, main="Figure 10 - Pie Chart by Category - Available Apps")
+```
+I have noticed the following patterns in Figure 11 to 13:
+
+•	More available in family, game and tools, but more installed in game, communication and productivity.
+
+•	Apps available and installed are rated for everyone versus teen and mature.	
+
+•	Most apps available and installed are free.	
+
+```{r eda1, echo=FALSE, fig.height= 5, fig.width=6, fig.align='center'}
+### Exploratory Data Analysis
+
+# Category - Family, Game, tools, business, medical, Productivity, Sports, Lifestyle, Communication and Finance - Most Available Apps
+# Type, Category and Rating- More Available in type
+ggplot(google6, aes(x= fct_infreq(category), fill = rating)) + geom_bar() + coord_flip() + facet_wrap(~type) + labs(title='Figure 11 - Category/Rating Available', x = 'Category')
+
+# Category and Installs
+ggplot(google6, aes(x=fct_infreq(category), y=installs_n, fill = rating)) + geom_col() + coord_flip() + labs(title='Figure 11 - Category/Rating-Installations', x = 'Installs')
+
+# Rating and type
+ggplot(google6) + geom_bar(aes(x= fct_infreq(rating), fill=type)) + coord_flip() + labs(title='Figure 13 - Rating vs Type', x = 'Rating')
+```
+
+I have noticed the following patterns in Figure 14 to 17:
+
+•	More apps in games, communication and family were reviewed - so people who installed it, most likely also reviewed it		
+
+•	Family and games have higher score rating. Communication was not as highly rated.
+
+•	More higher scored apps were reviewed (intuitive)		
+
+•	Higher scored apps were installed more (and in games, communication family and tools)	
+
+
+```{r eda2, echo=FALSE, fig.height= 5, fig.width=6, fig.align='center'}
+### Exploratory Data Analysis
+
+
+# Cetegory and Reviews versus type - games were reviewed more
+ggplot(google6, aes(x=category, y = reviews, fill = type)) + geom_col() + coord_flip() + labs(title='Figure 14 - Category/Reviews')
+
+# Score and Category
+ggplot(google6, aes(x=score2, y = category)) + geom_col() + labs(title='Figure 15 - Category/Score', x = 'Score')
+
+# score and reviews - Intuitive but more Score given with more reviews
+ggplot(google6, aes(x=score2, y=reviews, fill = type)) + geom_col() + labs(title='Figure 16 - Reviews/Score', x = 'Score')
+# Score and Installs - More installed on high rated
+ggplot(google6, aes(x=score2, y=installs_n, fill = category)) + geom_col() + labs(title='Figure 17 - Installs/Score Available', x = 'Score', y='Installs')
+
+```
+I have noticed the following patterns in Figure 18 to 23:
+
+•	More apps were updated in july, august, may, june	
+
+•	More updated apps were installed in july and august	
+
+•	More reviewed in recent years
+
+•	More installations in older versions of Android. More Specifically Android Version 4.
+
+•	Average preferred size of App - 25 mb
+
+•	‘Everyone' rated apps are rated higher
+
+```{r eda3, echo=FALSE, fig.height= 5, fig.width=6, fig.align='center'}
+
+
+# Date and Installs - people installed apps with recent updates - CHANGE LINE
+#ggplot(google6, aes(x= updated_date, y = installs_n)) + geom_line()
+
+# Month - More apps are updated in July, August, June, May
+ggplot(google6) + geom_bar(aes(x= fct_infreq(updated_m)), fill='blue') + coord_flip() + labs(title='Figure 18 - Monthly Updates vs Available Apps', x = 'Month', y='Number of Apps Updated')
+
+# Updated apps are usually installed in July and August MOstly
+ggplot(google6, aes(x=fct_infreq(updated_m), y=installs_n, fill = 'red')) + coord_flip() + geom_col() + labs(title='Figure 19 - Monthly Updates vs Installs', x = 'Month', y='Installs')
+
+# More reviews recently
+ggplot(google6, aes(x = updated_date, y = reviews)) + geom_point() + labs(title='Figure 20 - Reviews vs Date', x = 'Updated Date', y='Number of Reviews')
+
+# Android Version and Installs - More installs in Older Android Versions
+ggplot(google6, aes(x=android2, y=installs_n)) + geom_col(fill='darkgreen') + labs(title='Figure 21 - Android Version and Number of Installs', x = 'Android Version', y='Number of Installs')
+
+# Rating and Size - 25mb
+ggplot(google6, aes(x=rating, y=size3, color='red', fill='red')) + geom_boxplot() + labs(title='Figure 22 - Rating and Size Boxplot', x = 'Rating', y='Size (mb)')
+
+# Rating and Size
+ggplot(google6, aes(x=rating, y=score2)) + geom_boxplot(fill='purple') + labs(title='Figure 23 - Score vs Rating', x = 'Rating', y='Score')
+```
+
+## Section 4 - Applying Machine Learning Algorithms
+
+Exploratory data analysis has provided a lot of useful insights. But I would like to predict if an app would be succesful if launched into the google play store. To do this I have applied varioua machine learning algorithms and the best one thus far was Random Forrest. It has an accuracy of 59.3%.
+It is definitely not the best.
+
+```{r split, warning = FALSE, echo=FALSE}
+
+# Split into train and test
+
+# Dropping certain features as is not relevant
+google8 <- google6[-6]
+
+set.seed(123)
+trainindex <- createDataPartition(google8$installs_f, p=0.8, list= FALSE)
+google_train <- google8[trainindex, ]
+google_test <- google8[-trainindex, ]
+```
+
+```{r randomforest, echo=FALSE}
+set.seed(123)
+
+rfm <- randomForest(installs_f~., data=google_train)
+#summary(rfm)
+
+pred_rfm <- predict(rfm, google_test)
+
+# confusion matrix
+conf_matrix <- table(Predicted = pred_rfm, Actual = google_test$installs_f)
+
+# accuracy
+print(c("Accuracy is:", (sum(diag(conf_matrix))) / sum(conf_matrix)))
+
+```
+## Section 5 - Business Relevance
+
+While the ML algorithm wasn't as accurate, the EDA has revealed the following potential business implications:
+
+•	Focus on releasing apps in game and communication category and less in family.
+
+•	Improve communication apps as it was not highly scored.
+
+•	Age rating of ‘Everyone’ preferred (vs Mature and Teen).
+
+•	Focus on apps compatible with Android Version 4.
+
+•	Release and update apps during Summer (June, July and August).
+
+•	The average download size is 25 mb.
+
+•	‘Random Forest’ can be used to predict number of installs in Google Play Store. But not recommended.
+
+
+## Conclusion
+
+This report looked at Google Play Store data set, which can be found on Kaggle. I have found various things through EDA, including higher demand for gameing and communication apps. I have applied various Machine LEarning algorithms, but Random Forrest was the most effective at 59.34%.
