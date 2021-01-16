@@ -73,9 +73,9 @@ names(google)[13] <- "android"
 # Dropping Current Version as it is not relevant
 google2 <- google[-c(8, 10, 12)]
 
-#summary(google2)
+summary(google2)
 #spec(google2)
-#glimpse(google2)
+glimpse(google2)
 #str(google2)
 
 #x <- as.data.frame(head(google)) # Show in Markdown in data table
@@ -282,11 +282,11 @@ set.seed(123)
 # ggplot(google4, aes(x=score2)) + geom_histogram(fill='green', color='black') + theme_minimal() + labs(title='Histogram Score-Boxplot')
 
 par(mfrow=c(1,2))
-boxplot(google4$score2, horizontal = TRUE, main='Figure 4 - Score Outlier, Boxplot', xlab ='Score (rating out of 5)')
+boxplot(google4$score2, horizontal = TRUE, main='Figure 4 - Score Outlier', xlab ='Score (rating out of 5)')
 hist(google4$score2, main='Figure 5 - Score Outlier, Histogram', xlab ='Score (rating out of 5)')
-boxplot(google4$size3, horizontal = TRUE, main='Figure 6 - Size Outlier, Boxplot', xlab = 'Size (mb)')
+boxplot(google4$size3, horizontal = TRUE, main='Figure 6 - Size Outlier', xlab = 'Size (mb)')
 hist(google4$size3, main='Figure 7 - Size Outlier, Histogram', xlab = 'Size (mb)')
-boxplot(google4$android2, horizontal = TRUE, main='Figure 8 - Android Outlier, Boxplot', xlab = 'Android Version')
+boxplot(google4$android2, horizontal = TRUE, main='Figure 8 - Android Outlier', xlab = 'Android Version')
 hist(google4$android2, main='Figure 9 - Android Outlier, Histogram', xlab = 'Android Version')
 
 # Size Outliers
